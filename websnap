@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# websnap - Take screenshots of web pages using shot-scraper
+
+set -e
+
+# Defaults
+WIDTH=1280
+HEIGHT=1080
+X_OFFSET=""
+Y_OFFSET=""
+URL=""
+
+show_help() {
+    echo "websnap - Take screenshots of web pages using shot-scraper"
+    echo ""
+    echo "Usage: websnap <url> [options]"
+    echo ""
+    echo "Arguments:"
+    echo "  url                  Required. The URL to screenshot"
+    echo ""
+    echo "Options:"
+    echo "  -w, --width <px>     Viewport width (default: 1280)"
+    echo "  -h, --height <px>    Viewport height (default: 1080)"
+    echo "  -x, --xoffset <px>   Horizontal scroll offset"
+    echo "  -y, --yoffset <px>   Vertical scroll offset"
+    echo "      --help           Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  websnap http://localhost:1313/guide/"
+    echo "  websnap http://localhost:1313/guide/ -w 1920 -h 1080"
+    echo "  websnap http://localhost:1313/guide/ --width 1280 --height 800 -y 800"
+    echo ""
+    echo "Output:"
+    echo "  Screenshots are saved to /tmp/{filename}.png"
+    exit 0
+}
+
+# Parse arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -w|--width)
+            WIDTH="$2"
+            shift 2
+            ;;
+        -h|--height)
+            HEIGHT="$2"
+            shift 2
+            ;;
+        -x|--xoffset)
+            X_OFFSET="$2"
+            shift 2
+            ;;
+        -y|--yoffset)
+            Y_OFFSET="$2"
+            shift 2
+            ;;
+        --help)
+            show_help
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            URL="$1"
+            shift
+            ;;
+    esac
+done
+
+# Check for required URL
+if [ -z "$URL" ]; then
+    show_help
+fi
+
+# Generate filename from URL
+FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+OUTPUT_PATH="/tmp/${FILENAME}.png"
+
+# Build the command
+if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
+    # With scroll offset - use JavaScript with delay
+    X_SCROLL="${X_OFFSET:-0}"
+    Y_SCROLL="${Y_OFFSET:-0}"
+    shot-scraper "$URL" \
+        --width "$WIDTH" \
+        --height "$HEIGHT" \
+        --output "$OUTPUT_PATH" \
+        --javascript "
+new Promise(takeShot => {
+    window.scrollTo($X_SCROLL, $Y_SCROLL);
+    setTimeout(() => {
+        takeShot();
+    }, 1000);
+});
+" > /dev/null 2>&1
+else
+    # No scroll offset - fast snap without JavaScript
+    shot-scraper "$URL" \
+        --width "$WIDTH" \
+        --height "$HEIGHT" \
+        --output "$OUTPUT_PATH" > /dev/null 2>&1
+fi
+
+echo "${OUTPUT_PATH}"
