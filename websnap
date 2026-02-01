@@ -107,19 +107,18 @@ fi
 
 # Build the command
 if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
-    # With scroll offset - use JavaScript with delay
+    # With scroll offset - use JavaScript to scroll instantly
     X_SCROLL="${X_OFFSET:-0}"
     Y_SCROLL="${Y_OFFSET:-0}"
     shot-scraper "$URL" \
         --width "$WIDTH" \
         $HEIGHT_ARG \
         --output "$OUTPUT_PATH" \
+        --reduced-motion \
         --javascript "
-new Promise(takeShot => {
-    window.scrollTo($X_SCROLL, $Y_SCROLL);
-    setTimeout(() => {
-        takeShot();
-    }, 1000);
+new Promise(resolve => {
+    window.scrollTo({ left: $X_SCROLL, top: $Y_SCROLL, behavior: 'instant' });
+    setTimeout(resolve, 1000);
 });
 " > /dev/null 2>&1
 else
@@ -127,7 +126,8 @@ else
     shot-scraper "$URL" \
         --width "$WIDTH" \
         $HEIGHT_ARG \
-        --output "$OUTPUT_PATH" > /dev/null 2>&1
+        --output "$OUTPUT_PATH" \
+        --reduced-motion > /dev/null 2>&1
 fi
 
 echo "${OUTPUT_PATH}"

@@ -30,3 +30,9 @@ Single bash script (`websnap`) that:
 4. Calls `shot-scraper` with appropriate flags (omits height for `-f` full page mode)
 5. When scroll offsets are provided, injects JavaScript to scroll before capture (adds 1s delay)
 6. Outputs only the file path to stdout for piping
+
+## Known Limitations
+
+- **Video codec support**: Headless Chromium (used by shot-scraper) has limited video codec support. Videos encoded with H.265/HEVC or other proprietary codecs won't load metadata, causing them to render at incorrect dimensions. H.264 videos generally work. This is a Chromium limitation, not a websnap issue.
+
+- **Lazy-loaded content**: When using scroll offsets, websnap attempts to disable lazy loading and preload images before scrolling. However, JS-based lazy loading may still cause layout differences compared to a fully-scrolled browser session.

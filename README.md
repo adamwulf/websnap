@@ -59,6 +59,12 @@ websnap http://example.com | xargs open
 
 Screenshots are saved to `/tmp/{filename}.png` where the filename is derived from the URL. Only the file path is printed to stdout, making it easy to pipe into other commands.
 
+## Known Limitations
+
+- **Video codec support**: Headless Chromium (used by shot-scraper) has limited video codec support. Videos encoded with H.265/HEVC or other proprietary codecs won't load metadata, causing them to render at incorrect dimensions. H.264 videos generally work.
+
+- **Lazy-loaded content**: When using scroll offsets, websnap attempts to disable lazy loading and preload images before scrolling. However, JS-based lazy loading may still cause layout differences compared to a fully-scrolled browser session.
+
 ## Claude Code Skill
 
 This repo includes a Claude Code skill that enables the `/websnap` command. To install:
