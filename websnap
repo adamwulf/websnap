@@ -9,6 +9,8 @@ WIDTH=1280
 HEIGHT=1080
 X_OFFSET=""
 Y_OFFSET=""
+FULL_PAGE=""
+RUN_JS=""
 URL=""
 
 show_help() {
@@ -24,12 +26,16 @@ show_help() {
     echo "  -h, --height <px>    Viewport height (default: 1080)"
     echo "  -x, --xoffset <px>   Horizontal scroll offset"
     echo "  -y, --yoffset <px>   Vertical scroll offset"
+    echo "  -f, --full           Capture full page height"
+    echo "  -r, --run <js>       Run JavaScript and output result (no screenshot)"
     echo "      --help           Show this help message"
     echo ""
     echo "Examples:"
     echo "  websnap http://localhost:1313/guide/"
     echo "  websnap http://localhost:1313/guide/ -w 1920 -h 1080"
     echo "  websnap http://localhost:1313/guide/ --width 1280 --height 800 -y 800"
+    echo "  websnap http://localhost:1313/guide/ -f   # full page screenshot"
+    echo "  websnap http://example.com -r 'document.title'  # run JS, output result"
     echo ""
     echo "Output:"
     echo "  Screenshots are saved to /tmp/{filename}.png"
@@ -55,6 +61,14 @@ while [ $# -gt 0 ]; do
             Y_OFFSET="$2"
             shift 2
             ;;
+        -f|--full)
+            FULL_PAGE="1"
+            shift
+            ;;
+        -r|--run)
+            RUN_JS="$2"
+            shift 2
+            ;;
         --help)
             show_help
             ;;
@@ -74,9 +88,22 @@ if [ -z "$URL" ]; then
     show_help
 fi
 
+# If running JavaScript, execute and exit
+if [ -n "$RUN_JS" ]; then
+    shot-scraper javascript "$URL" "$RUN_JS" --raw
+    exit 0
+fi
+
 # Generate filename from URL
 FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
 OUTPUT_PATH="/tmp/${FILENAME}.png"
+
+# Build height argument (omit for full page capture)
+if [ -n "$FULL_PAGE" ]; then
+    HEIGHT_ARG=""
+else
+    HEIGHT_ARG="--height $HEIGHT"
+fi
 
 # Build the command
 if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
@@ -85,7 +112,7 @@ if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
     Y_SCROLL="${Y_OFFSET:-0}"
     shot-scraper "$URL" \
         --width "$WIDTH" \
-        --height "$HEIGHT" \
+        $HEIGHT_ARG \
         --output "$OUTPUT_PATH" \
         --javascript "
 new Promise(takeShot => {
@@ -99,7 +126,7 @@ else
     # No scroll offset - fast snap without JavaScript
     shot-scraper "$URL" \
         --width "$WIDTH" \
-        --height "$HEIGHT" \
+        $HEIGHT_ARG \
         --output "$OUTPUT_PATH" > /dev/null 2>&1
 fi
 
