@@ -100,11 +100,24 @@ fi
 # Resolve user-agent: explicit flag > default
 EFFECTIVE_UA="${USER_AGENT:-$DEFAULT_USER_AGENT}"
 
+# Path to the Playwright-based capture script (same directory as websnap)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CAPTURE_SCRIPT="${SCRIPT_DIR}/websnap_capture.py"
+
+# Find the Python that has playwright (from shot-scraper's pipx venv)
+SHOT_SCRAPER_PATH="$(command -v shot-scraper)"
+if [ -n "$SHOT_SCRAPER_PATH" ]; then
+    # shot-scraper is a script with a shebang pointing to its venv python
+    VENV_PYTHON="$(head -1 "$SHOT_SCRAPER_PATH" | sed 's/^#!//')"
+else
+    VENV_PYTHON="python3"
+fi
+
 # If running JavaScript, execute and exit
 if [ -n "$RUN_JS" ]; then
-    shot-scraper javascript "$URL" "$RUN_JS" --raw \
-        --user-agent "$EFFECTIVE_UA" \
-        --browser-arg "--disable-blink-features=AutomationControlled"
+    "$VENV_PYTHON" "$CAPTURE_SCRIPT" "$URL" \
+        --run-js "$RUN_JS" \
+        --user-agent "$EFFECTIVE_UA"
     exit 0
 fi
 
@@ -112,40 +125,27 @@ fi
 FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
 OUTPUT_PATH="/tmp/${FILENAME}.png"
 
-# Build height argument (omit for full page capture)
+# Build the capture command arguments
+CAPTURE_ARGS=("$URL" --width "$WIDTH" --output "$OUTPUT_PATH" --reduced-motion --user-agent "$EFFECTIVE_UA")
+
 if [ -n "$FULL_PAGE" ]; then
-    HEIGHT_ARG=""
+    CAPTURE_ARGS+=(--full-page)
 else
-    HEIGHT_ARG="--height $HEIGHT"
+    CAPTURE_ARGS+=(--height "$HEIGHT")
 fi
 
-# Build the command
+# With scroll offset - use JavaScript to scroll instantly
 if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
-    # With scroll offset - use JavaScript to scroll instantly
     X_SCROLL="${X_OFFSET:-0}"
     Y_SCROLL="${Y_OFFSET:-0}"
-    shot-scraper "$URL" \
-        --width "$WIDTH" \
-        $HEIGHT_ARG \
-        --output "$OUTPUT_PATH" \
-        --reduced-motion \
-        --user-agent "$EFFECTIVE_UA" \
-        --browser-arg "--disable-blink-features=AutomationControlled" \
-        --javascript "
+    CAPTURE_ARGS+=(--javascript "
 new Promise(resolve => {
     window.scrollTo({ left: $X_SCROLL, top: $Y_SCROLL, behavior: 'instant' });
     setTimeout(resolve, 1000);
 });
-" > /dev/null 2>&1
-else
-    # No scroll offset - fast snap without JavaScript
-    shot-scraper "$URL" \
-        --width "$WIDTH" \
-        $HEIGHT_ARG \
-        --output "$OUTPUT_PATH" \
-        --reduced-motion \
-        --user-agent "$EFFECTIVE_UA" \
-        --browser-arg "--disable-blink-features=AutomationControlled" > /dev/null 2>&1
+")
 fi
+
+"$VENV_PYTHON" "$CAPTURE_SCRIPT" "${CAPTURE_ARGS[@]}" > /dev/null 2>&1
 
 echo "${OUTPUT_PATH}"

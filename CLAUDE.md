@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-websnap is a bash script wrapper around `shot-scraper` for taking screenshots of web pages or executing JavaScript against them. It outputs only the screenshot path (or JS result) to stdout, making it easy to pipe into other commands.
+websnap is a bash script that uses Playwright (via `websnap_capture.py`) for taking screenshots of web pages or executing JavaScript against them. It outputs only the screenshot path (or JS result) to stdout, making it easy to pipe into other commands.
 
 Each invocation spawns a fresh browser instance—no state (cookies, localStorage, sessions) persists between calls.
 
 ## Dependencies
 
-- `shot-scraper` - Python tool for taking screenshots (install via `pipx install shot-scraper`)
+- `shot-scraper` - Python tool (install via `pipx install shot-scraper`). websnap uses shot-scraper's bundled Playwright and Python venv rather than calling shot-scraper directly.
 
 ## Usage
 
@@ -23,14 +23,19 @@ websnap http://example.com -r 'document.title'  # run JS, output result
 
 ## Architecture
 
-Single bash script (`websnap`) that:
-1. Parses command-line arguments for URL, dimensions, scroll offsets, and mode flags
-2. If `-r` flag: runs `shot-scraper javascript` and outputs the result directly
-3. Otherwise: generates output filename from URL (saved to `/tmp/`)
-4. Calls `shot-scraper` with appropriate flags (omits height for `-f` full page mode)
-5. When scroll offsets are provided, injects JavaScript to scroll before capture (adds 1s delay)
-6. Passes a realistic Chrome user-agent and disables automation flags to avoid bot detection
-7. Outputs only the file path to stdout for piping
+Two files:
+- `websnap` (bash) — CLI interface, argument parsing, orchestration
+- `websnap_capture.py` (Python) — Playwright-based capture with realistic HTTP headers
+
+Flow:
+1. `websnap` parses command-line arguments for URL, dimensions, scroll offsets, and mode flags
+2. Discovers the Python interpreter from shot-scraper's pipx venv (which has Playwright installed)
+3. If `-r` flag: runs `websnap_capture.py --run-js` and outputs the result directly
+4. Otherwise: generates output filename from URL (saved to `/tmp/`)
+5. Calls `websnap_capture.py` with appropriate flags (omits height for `-f` full page mode)
+6. When scroll offsets are provided, injects JavaScript to scroll before capture (adds 1s delay)
+7. `websnap_capture.py` sets realistic HTTP-layer headers (Accept, Accept-Language, Sec-Fetch-*, sec-ch-ua, etc.) via Playwright's `extra_http_headers` to bypass anti-bot systems like Akamai
+8. Outputs only the file path to stdout for piping
 
 ## Known Limitations
 
@@ -38,4 +43,4 @@ Single bash script (`websnap`) that:
 
 - **Lazy-loaded content**: When using scroll offsets, websnap attempts to disable lazy loading and preload images before scrolling. However, JS-based lazy loading may still cause layout differences compared to a fully-scrolled browser session.
 
-- **Bot detection (Akamai, Cloudflare, etc.)**: Some sites use aggressive anti-bot services that check TLS fingerprints, JavaScript challenges, and behavioral analysis beyond just user-agent strings. websnap mitigates the most common checks (user-agent and automation flags), but sites with advanced bot protection (e.g., Akamai Bot Manager) may still block access. The `-u` flag allows overriding the user-agent if needed.
+- **Bot detection (Akamai, Cloudflare, etc.)**: websnap sets realistic HTTP-layer headers (Accept, Accept-Language, Sec-Fetch-*, sec-ch-ua) to bypass most anti-bot checks. Sites with advanced behavioral analysis (mouse movement, JS challenges) may still detect automation. The `-u` flag allows overriding the user-agent if needed.
