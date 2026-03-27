@@ -11,7 +11,11 @@ X_OFFSET=""
 Y_OFFSET=""
 FULL_PAGE=""
 RUN_JS=""
+USER_AGENT=""
 URL=""
+
+# Default user-agent mimics a real Chrome browser to avoid bot detection
+DEFAULT_USER_AGENT="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 show_help() {
     echo "websnap - Take screenshots of web pages using shot-scraper"
@@ -28,6 +32,7 @@ show_help() {
     echo "  -y, --yoffset <px>   Vertical scroll offset"
     echo "  -f, --full           Capture full page height"
     echo "  -r, --run <js>       Run JavaScript and output result (no screenshot)"
+    echo "  -u, --user-agent <s> Custom User-Agent string"
     echo "      --help           Show this help message"
     echo ""
     echo "Examples:"
@@ -69,6 +74,10 @@ while [ $# -gt 0 ]; do
             RUN_JS="$2"
             shift 2
             ;;
+        -u|--user-agent)
+            USER_AGENT="$2"
+            shift 2
+            ;;
         --help)
             show_help
             ;;
@@ -88,9 +97,14 @@ if [ -z "$URL" ]; then
     show_help
 fi
 
+# Resolve user-agent: explicit flag > default
+EFFECTIVE_UA="${USER_AGENT:-$DEFAULT_USER_AGENT}"
+
 # If running JavaScript, execute and exit
 if [ -n "$RUN_JS" ]; then
-    shot-scraper javascript "$URL" "$RUN_JS" --raw
+    shot-scraper javascript "$URL" "$RUN_JS" --raw \
+        --user-agent "$EFFECTIVE_UA" \
+        --browser-arg "--disable-blink-features=AutomationControlled"
     exit 0
 fi
 
@@ -115,6 +129,8 @@ if [ -n "$X_OFFSET" ] || [ -n "$Y_OFFSET" ]; then
         $HEIGHT_ARG \
         --output "$OUTPUT_PATH" \
         --reduced-motion \
+        --user-agent "$EFFECTIVE_UA" \
+        --browser-arg "--disable-blink-features=AutomationControlled" \
         --javascript "
 new Promise(resolve => {
     window.scrollTo({ left: $X_SCROLL, top: $Y_SCROLL, behavior: 'instant' });
@@ -127,7 +143,9 @@ else
         --width "$WIDTH" \
         $HEIGHT_ARG \
         --output "$OUTPUT_PATH" \
-        --reduced-motion > /dev/null 2>&1
+        --reduced-motion \
+        --user-agent "$EFFECTIVE_UA" \
+        --browser-arg "--disable-blink-features=AutomationControlled" > /dev/null 2>&1
 fi
 
 echo "${OUTPUT_PATH}"
