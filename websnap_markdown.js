@@ -14,6 +14,16 @@
 // text-first CLI, so images keep their absolutized remote URLs and Python owns
 // the file write.
 //
+// UPSTREAM: this file (and the vendored libraries under vendor/) are copied,
+// not linked, from the freezedry-webpage repo:
+//   extension/src/content/export-markdown.js  (the pipeline logic)
+//   extension/src/vendor/{readability,turndown,turndown-plugin-gfm}.js
+// There is no build step tying them together, so this is a MANUAL coupling: if
+// the extension bumps a vendored library or changes the flow (MIN_ARTICLE_CHARS,
+// the READERABLE_* reader gate, the strip selectors, the Turndown options), this
+// copy will silently drift. When updating, re-sync against that upstream and
+// keep vendor/README.md's version table current.
+//
 // A page that looks like a prose article (isProbablyReaderable) is extracted with
 // Readability and converted to GitHub-flavored Markdown with Turndown. Everything
 // else — a dashboard, a list, an app screen — takes the full-page path: the whole
