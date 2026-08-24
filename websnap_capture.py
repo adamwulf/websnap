@@ -8,6 +8,7 @@ systems (Akamai, Cloudflare, etc.) expect from a real browser.
 
 import argparse
 import json
+import os
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -35,6 +36,20 @@ DEFAULT_USER_AGENT = (
     "Chrome/131.0.0.0 Safari/537.36"
 )
 
+# Directory holding this script, the vendor/ libraries, and websnap_markdown.js.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Classic scripts injected (in order) into the rendered page for --markdown: the
+# three vendored libraries define the Readability / TurndownService /
+# turndownPluginGfm globals, then websnap_markdown.js defines
+# window.__websnapExtractMarkdown() against them. See vendor/README.md.
+MARKDOWN_SCRIPTS = [
+    os.path.join(SCRIPT_DIR, "vendor", "readability.js"),
+    os.path.join(SCRIPT_DIR, "vendor", "turndown.js"),
+    os.path.join(SCRIPT_DIR, "vendor", "turndown-plugin-gfm.js"),
+    os.path.join(SCRIPT_DIR, "websnap_markdown.js"),
+]
+
 
 def main():
     parser = argparse.ArgumentParser(description="Capture web pages with realistic headers")
@@ -44,9 +59,14 @@ def main():
     parser.add_argument("--output", help="Output file path")
     parser.add_argument("--javascript", help="JavaScript to execute before capture")
     parser.add_argument("--run-js", help="Run JavaScript and output result (no screenshot)")
+    parser.add_argument("--markdown", action="store_true",
+                        help="Extract the page as Markdown instead of a screenshot")
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--reduced-motion", action="store_true")
     parser.add_argument("--full-page", action="store_true")
+    parser.add_argument("--no-js", action="store_true",
+                        help="Disable the page's own JavaScript (capture the "
+                             "server-rendered HTML before any client hydration)")
 
     args = parser.parse_args()
 
@@ -65,6 +85,12 @@ def main():
         }
         if args.reduced_motion:
             context_opts["reduced_motion"] = "reduce"
+        # --no-js disables the page's own scripts so a client-side SPA can't
+        # rewrite the server-rendered HTML before we capture it. Markdown
+        # extraction still works: its libraries are injected over the debugger's
+        # evaluate channel (see below), which runs even with page JS disabled.
+        if args.no_js:
+            context_opts["java_script_enabled"] = False
 
         context = browser.new_context(**context_opts)
         page = context.new_page()
@@ -78,6 +104,37 @@ def main():
             if result is not None:
                 print(result)
             browser.close()
+            return
+
+        # Markdown mode: extract the rendered page as Markdown and write it out.
+        # Runs after the page has rendered (goto waited for networkidle) so the
+        # full-page fallback's getClientRects()/getComputedStyle checks see real
+        # layout.
+        if args.markdown:
+            # Inject the vendored libraries + extractor over the debugger's
+            # evaluate channel (indirect eval to define their globals) rather
+            # than as <script> tags. This runs even when the page's own
+            # JavaScript is disabled (--no-js) — add_script_tag scripts would
+            # not — and is not subject to the page's CSP.
+            for script_path in MARKDOWN_SCRIPTS:
+                with open(script_path, "r", encoding="utf-8") as handle:
+                    source = handle.read()
+                page.evaluate("(src) => { (0, eval)(src); }", source)
+            result = page.evaluate("() => window.__websnapExtractMarkdown()")
+            browser.close()
+
+            if not result or not result.get("ok"):
+                error = (result or {}).get("error", "unknown error")
+                print("Markdown extraction failed: " + error, file=sys.stderr)
+                sys.exit(1)
+
+            markdown = result["markdown"]
+            if args.output:
+                with open(args.output, "w", encoding="utf-8") as handle:
+                    handle.write(markdown)
+                print(args.output)
+            else:
+                sys.stdout.write(markdown)
             return
 
         # Execute pre-screenshot JavaScript if provided

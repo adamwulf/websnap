@@ -1,7 +1,7 @@
 ---
 name: websnap
-description: Take a screenshot of a web page or run JavaScript against it. Use when checking page layout, verifying styling changes, inspecting rendered content, or querying page properties like dimensions.
-argument-hint: <url> [-w width] [-h height] [-y scroll] [-f] [-r js]
+description: Take a screenshot of a web page, extract it as Markdown, or run JavaScript against it. Use when checking page layout, verifying styling changes, inspecting rendered content, reading a page as text, or querying page properties like dimensions.
+argument-hint: <url> [-w width] [-h height] [-y scroll] [-f] [-r js] [--format png|md]
 allowed-tools: Bash, Read
 disable-model-invocation: true
 ---
@@ -12,7 +12,8 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 
 1. Run: `websnap $ARGUMENTS`
 2. For screenshots: the command outputs the path to the saved PNG (in `/tmp/`), then use the Read tool to display the image
-3. For `-r` (run JS): the command outputs the JavaScript result directly (no screenshot)
+3. For `--format md`: the command outputs the path to the saved Markdown file (in `/tmp/`), then use the Read tool to display its contents
+4. For `-r` (run JS): the command outputs the JavaScript result directly (no screenshot)
 
 ## Options
 
@@ -20,8 +21,10 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 - `-h, --height <px>` — Viewport height (default: 1080)
 - `-x, --xoffset <px>` — Horizontal scroll offset
 - `-y, --yoffset <px>` — Vertical scroll offset
-- `-f, --full` — Capture full page height (ignores -h)
+- `-f, --full` — Capture full page height (ignores -h; png only)
 - `-r, --run <js>` — Run JavaScript and output result (no screenshot)
+- `--format <fmt>` — Output format: `png` (screenshot) or `md` (Markdown). Default: `png`
+- `--no-js` — Disable the page's JavaScript (capture server-rendered HTML; helps with SPA/archived pages where JS rewrites the content). Readability still runs.
 
 ## Examples
 
@@ -32,6 +35,8 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 /websnap http://localhost:1313/ -f
 /websnap http://example.com -r 'document.title'
 /websnap http://example.com -r 'document.documentElement.scrollHeight'
+/websnap http://example.com --format md
+/websnap https://web.archive.org/web/.../https://medium.com/... --format md --no-js
 ```
 
 If no URL is provided, ask the user what page they want to screenshot.

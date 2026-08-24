@@ -12,6 +12,8 @@ Y_OFFSET=""
 FULL_PAGE=""
 RUN_JS=""
 USER_AGENT=""
+FORMAT="png"
+NO_JS=""
 URL=""
 
 # Default user-agent mimics a real Chrome browser to avoid bot detection
@@ -30,9 +32,13 @@ show_help() {
     echo "  -h, --height <px>    Viewport height (default: 1080)"
     echo "  -x, --xoffset <px>   Horizontal scroll offset"
     echo "  -y, --yoffset <px>   Vertical scroll offset"
-    echo "  -f, --full           Capture full page height"
+    echo "  -f, --full           Capture full page height (png only)"
     echo "  -r, --run <js>       Run JavaScript and output result (no screenshot)"
     echo "  -u, --user-agent <s> Custom User-Agent string"
+    echo "      --format <fmt>   Output format: png (screenshot) or md (Markdown)"
+    echo "                       (default: png)"
+    echo "      --no-js          Disable the page's JavaScript (capture server-"
+    echo "                       rendered HTML; helps with SPA/archived pages)"
     echo "      --help           Show this help message"
     echo ""
     echo "Examples:"
@@ -41,9 +47,12 @@ show_help() {
     echo "  websnap http://localhost:1313/guide/ --width 1280 --height 800 -y 800"
     echo "  websnap http://localhost:1313/guide/ -f   # full page screenshot"
     echo "  websnap http://example.com -r 'document.title'  # run JS, output result"
+    echo "  websnap http://example.com --format md   # extract page as Markdown"
+    echo "  websnap http://example.com --format md --no-js  # SPA/archived pages"
     echo ""
     echo "Output:"
-    echo "  Screenshots are saved to /tmp/{filename}.png"
+    echo "  png: screenshot saved to /tmp/{filename}.png"
+    echo "  md:  Markdown saved to /tmp/{filename}.md"
     exit 0
 }
 
@@ -78,6 +87,14 @@ while [ $# -gt 0 ]; do
             USER_AGENT="$2"
             shift 2
             ;;
+        --format)
+            FORMAT="$2"
+            shift 2
+            ;;
+        --no-js)
+            NO_JS="1"
+            shift
+            ;;
         --help)
             show_help
             ;;
@@ -95,6 +112,12 @@ done
 # Check for required URL
 if [ -z "$URL" ]; then
     show_help
+fi
+
+# Validate output format
+if [ "$FORMAT" != "png" ] && [ "$FORMAT" != "md" ]; then
+    echo "Invalid format: $FORMAT (expected 'png' or 'md')" >&2
+    exit 1
 fi
 
 # Resolve user-agent: explicit flag > default
@@ -123,10 +146,31 @@ fi
 
 # Generate filename from URL
 FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+
+# Markdown mode: extract the rendered page as Markdown (no screenshot).
+# Scroll offsets and full-page height do not apply; only the viewport width and
+# user-agent affect what gets rendered and extracted.
+if [ "$FORMAT" = "md" ]; then
+    OUTPUT_PATH="/tmp/${FILENAME}.md"
+    "$VENV_PYTHON" "$CAPTURE_SCRIPT" "$URL" \
+        --markdown \
+        --width "$WIDTH" \
+        --height "$HEIGHT" \
+        --output "$OUTPUT_PATH" \
+        ${NO_JS:+--no-js} \
+        --user-agent "$EFFECTIVE_UA" > /dev/null
+    echo "${OUTPUT_PATH}"
+    exit 0
+fi
+
 OUTPUT_PATH="/tmp/${FILENAME}.png"
 
 # Build the capture command arguments
 CAPTURE_ARGS=("$URL" --width "$WIDTH" --output "$OUTPUT_PATH" --reduced-motion --user-agent "$EFFECTIVE_UA")
+
+if [ -n "$NO_JS" ]; then
+    CAPTURE_ARGS+=(--no-js)
+fi
 
 if [ -n "$FULL_PAGE" ]; then
     CAPTURE_ARGS+=(--full-page)
