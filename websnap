@@ -30,8 +30,8 @@ show_help() {
     echo "Options:"
     echo "  -w, --width <px>     Viewport width (default: 1280)"
     echo "  -h, --height <px>    Viewport height (default: 1080)"
-    echo "  -x, --xoffset <px>   Horizontal scroll offset"
-    echo "  -y, --yoffset <px>   Vertical scroll offset"
+    echo "  -x, --xoffset <px>   Horizontal scroll offset (png only)"
+    echo "  -y, --yoffset <px>   Vertical scroll offset (png only)"
     echo "  -f, --full           Capture full page height (png only)"
     echo "  -r, --run <js>       Run JavaScript and output result (no screenshot)"
     echo "  -u, --user-agent <s> Custom User-Agent string"
@@ -88,6 +88,10 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --format)
+            if [ $# -lt 2 ]; then
+                echo "Option --format requires a value (png or md)" >&2
+                exit 1
+            fi
             FORMAT="$2"
             shift 2
             ;;
@@ -136,7 +140,8 @@ else
     VENV_PYTHON="python3"
 fi
 
-# If running JavaScript, execute and exit
+# If running JavaScript, execute and exit. -r is its own output mode (prints the
+# JS result), so it takes precedence over and ignores --format / --no-js.
 if [ -n "$RUN_JS" ]; then
     "$VENV_PYTHON" "$CAPTURE_SCRIPT" "$URL" \
         --run-js "$RUN_JS" \
@@ -152,6 +157,9 @@ FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$|
 # user-agent affect what gets rendered and extracted.
 if [ "$FORMAT" = "md" ]; then
     OUTPUT_PATH="/tmp/${FILENAME}.md"
+    # Suppress only stdout (the capture script prints the path itself, which we
+    # echo below); keep stderr so an extraction failure message reaches the user.
+    # set -e then aborts before the echo if the capture exits non-zero.
     "$VENV_PYTHON" "$CAPTURE_SCRIPT" "$URL" \
         --markdown \
         --width "$WIDTH" \

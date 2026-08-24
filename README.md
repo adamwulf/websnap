@@ -27,8 +27,8 @@ websnap <url> [options]
 |--------|-------------|
 | `-w, --width <px>` | Viewport width (default: 1280) |
 | `-h, --height <px>` | Viewport height (default: 1080) |
-| `-x, --xoffset <px>` | Horizontal scroll offset |
-| `-y, --yoffset <px>` | Vertical scroll offset |
+| `-x, --xoffset <px>` | Horizontal scroll offset (png only) |
+| `-y, --yoffset <px>` | Vertical scroll offset (png only) |
 | `-f, --full` | Capture full page height (ignores -h; png only) |
 | `-r, --run <js>` | Run JavaScript and output result (no screenshot) |
 | `--format <fmt>` | Output format: `png` (screenshot) or `md` (Markdown). Default: `png` |

@@ -116,11 +116,21 @@ def main():
             # than as <script> tags. This runs even when the page's own
             # JavaScript is disabled (--no-js) — add_script_tag scripts would
             # not — and is not subject to the page's CSP.
-            for script_path in MARKDOWN_SCRIPTS:
-                with open(script_path, "r", encoding="utf-8") as handle:
-                    source = handle.read()
-                page.evaluate("(src) => { (0, eval)(src); }", source)
-            result = page.evaluate("() => window.__websnapExtractMarkdown()")
+            #
+            # Wrap injection + extraction so a load-time fault (a missing/broken
+            # vendored file leaving window.__websnapExtractMarkdown undefined)
+            # surfaces the same clean "Markdown extraction failed" message as a
+            # runtime failure, not a raw Playwright traceback.
+            try:
+                for script_path in MARKDOWN_SCRIPTS:
+                    with open(script_path, "r", encoding="utf-8") as handle:
+                        source = handle.read()
+                    page.evaluate("(src) => { (0, eval)(src); }", source)
+                result = page.evaluate("() => window.__websnapExtractMarkdown()")
+            except Exception as error:  # surface a clean CLI error, not a traceback
+                print("Markdown extraction failed: " + str(error), file=sys.stderr)
+                browser.close()
+                sys.exit(1)
             browser.close()
 
             if not result or not result.get("ok"):

@@ -1,7 +1,7 @@
 ---
 name: websnap
 description: Take a screenshot of a web page, extract it as Markdown, or run JavaScript against it. Use when checking page layout, verifying styling changes, inspecting rendered content, reading a page as text, or querying page properties like dimensions.
-argument-hint: <url> [-w width] [-h height] [-y scroll] [-f] [-r js] [--format png|md]
+argument-hint: <url> [-w width] [-h height] [-y scroll] [-f] [-r js] [--format png|md] [--no-js]
 allowed-tools: Bash, Read
 disable-model-invocation: true
 ---
@@ -19,8 +19,8 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 
 - `-w, --width <px>` — Viewport width (default: 1280)
 - `-h, --height <px>` — Viewport height (default: 1080)
-- `-x, --xoffset <px>` — Horizontal scroll offset
-- `-y, --yoffset <px>` — Vertical scroll offset
+- `-x, --xoffset <px>` — Horizontal scroll offset (png only)
+- `-y, --yoffset <px>` — Vertical scroll offset (png only)
 - `-f, --full` — Capture full page height (ignores -h; png only)
 - `-r, --run <js>` — Run JavaScript and output result (no screenshot)
 - `--format <fmt>` — Output format: `png` (screenshot) or `md` (Markdown). Default: `png`
@@ -44,3 +44,7 @@ If no URL is provided, ask the user what page they want to screenshot.
 ## Notes
 
 Each call to `websnap` spawns a fresh browser instance. State does not persist between calls (no cookies, localStorage, or session data).
+
+`--format md` extracts the main content (Mozilla Readability) and converts it to GitHub-flavored Markdown, saved as `/tmp/{filename}.md`. Each file begins with a YAML frontmatter block (`title`, `url`, `date` = fetch time, and `author` when a byline is found).
+
+Use `--no-js` when a `--format md` result comes back wrong on a single-page app or an archived (Wayback) snapshot — those are server-rendered with the article, but their client JavaScript can rewrite the DOM (often into a "404") before capture. Disabling page JS keeps the server-rendered content; Readability still runs. Do not use `--no-js` on genuinely client-rendered sites, which need their scripts to build the content at all.
