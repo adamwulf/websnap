@@ -50,6 +50,23 @@ MARKDOWN_SCRIPTS = [
     os.path.join(SCRIPT_DIR, "websnap_markdown.js"),
 ]
 
+# Proxy env vars, in priority order. Chromium ignores these, so a sandbox that
+# only allows localhost and exports a local filtering proxy (e.g. itsybitsy's)
+# would otherwise see every request fail with net::ERR_ACCESS_DENIED.
+PROXY_ENV_VARS = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"]
+
+
+def proxy_from_env():
+    """Return a Playwright proxy dict built from the proxy env vars, or None."""
+    server = next((os.environ[name] for name in PROXY_ENV_VARS if os.environ.get(name)), None)
+    if not server:
+        return None
+    proxy = {"server": server}
+    bypass = os.environ.get("no_proxy") or os.environ.get("NO_PROXY")
+    if bypass:
+        proxy["bypass"] = bypass
+    return proxy
+
 
 def main():
     parser = argparse.ArgumentParser(description="Capture web pages with realistic headers")
@@ -71,12 +88,19 @@ def main():
     args = parser.parse_args()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
+        launch_opts = {
+            "headless": True,
+            "args": [
                 "--disable-blink-features=AutomationControlled",
             ],
-        )
+        }
+        # Route through the env-configured proxy, if any. With none set, launch
+        # exactly as before (no proxy kwarg).
+        proxy = proxy_from_env()
+        if proxy:
+            launch_opts["proxy"] = proxy
+
+        browser = p.chromium.launch(**launch_opts)
 
         context_opts = {
             "user_agent": args.user_agent,
