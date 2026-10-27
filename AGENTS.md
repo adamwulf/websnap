@@ -54,6 +54,10 @@ After the page renders, `websnap_capture.py` reads the three `vendor/` libraries
 
 Sets Playwright's `java_script_enabled=False` on the context, so the page's own scripts never run and a client-side SPA can't rewrite the server-rendered HTML before capture. Works for both formats. It's essential for archived SPA snapshots (e.g. a Wayback `id_/` Medium URL): the raw HTML is server-rendered with the article, but Medium's client JS otherwise hydrates the DOM into its own 404. Because the Markdown libraries are injected over the evaluate channel (above), Readability still runs under `--no-js`. Do not use it on genuinely client-rendered sites — they need their scripts to build the content at all.
 
+### Proxy env vars
+
+Chromium ignores `http_proxy`/`https_proxy`, so `websnap_capture.py` passes them to `p.chromium.launch(proxy=...)` explicitly: the server is the first non-empty of `https_proxy`, `HTTPS_PROXY`, `http_proxy`, `HTTP_PROXY`, and `no_proxy`/`NO_PROXY` becomes the bypass list. This is what lets websnap work inside a sandbox that only allows localhost and exports a local filtering proxy (e.g. itsybitsy's); without it every page fails with `net::ERR_ACCESS_DENIED`. With no proxy var set, Chromium launches with no `proxy` option, as before.
+
 ## Known Limitations
 
 - **Video codec support**: Headless Chromium (used by shot-scraper) has limited video codec support. Videos encoded with H.265/HEVC or other proprietary codecs won't load metadata, causing them to render at incorrect dimensions. H.264 videos generally work. This is a Chromium limitation, not a websnap issue.
