@@ -15,10 +15,12 @@ Each invocation spawns a fresh browser instance—no state (cookies, localStorag
 ## Usage
 
 ```bash
-websnap <url> [options]
+websnap <url|file> [options]
 websnap http://example.com | xargs open  # take screenshot and open it
 websnap http://example.com -f            # full page screenshot
 websnap http://example.com -r 'document.title'  # run JS, output result
+websnap page.html --format md            # local HTML file
+websnap page.html --format md --base-url https://example.com/blog/post
 ```
 
 ## Architecture
@@ -53,6 +55,17 @@ After the page renders, `websnap_capture.py` reads the three `vendor/` libraries
 ### `--no-js`
 
 Sets Playwright's `java_script_enabled=False` on the context, so the page's own scripts never run and a client-side SPA can't rewrite the server-rendered HTML before capture. Works for both formats. It's essential for archived SPA snapshots (e.g. a Wayback `id_/` Medium URL): the raw HTML is server-rendered with the article, but Medium's client JS otherwise hydrates the DOM into its own 404. Because the Markdown libraries are injected over the evaluate channel (above), Readability still runs under `--no-js`. Do not use it on genuinely client-rendered sites — they need their scripts to build the content at all.
+
+### Local file input and `--base-url`
+
+The input is a local file if one exists at that path (`websnap` checks this first, so `foo:bar.html` is a file); otherwise it must have a URL scheme or `websnap` exits with an error. `--base-url` must be `http(s)` and is rejected for URL input, including `file://` URLs.
+
+`websnap_capture.py` serves a local file with a one-shot `page.route(..., times=1)` + `route.fulfill` as the response to `page.goto` — to `--base-url` if given, otherwise to the file's own `file://` URL. The later requests go out as usual, so relative assets load from the file's folder or from the base URL's site. This is why the behavior is the same for both:
+- It parses as HTML whatever the extension. A plain `file://` load of an extensionless file is not parsed as HTML, which would break temp files.
+- `document.URL`, and so the frontmatter `url`, is the real location. A `<base>` tag injected into the document couldn't do this.
+- The response declares `charset=utf-8` when the bytes are valid UTF-8 (`html_content_type`), because over `http(s)` Chromium reads undeclared text as windows-1252. Other bytes stay undeclared so the file's `<meta charset>` applies.
+
+Output names come from the file's absolute path, not its basename, so two `index.html` files in different folders don't overwrite each other.
 
 ### Proxy env vars
 

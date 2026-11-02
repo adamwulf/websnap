@@ -18,8 +18,10 @@ A simple command-line tool for taking screenshots of web pages.
 ## Usage
 
 ```bash
-websnap <url> [options]
+websnap <url|file> [options]
 ```
+
+The input is a URL or a path to a local HTML file. All options work the same for both.
 
 ### Options
 
@@ -33,6 +35,7 @@ websnap <url> [options]
 | `-r, --run <js>` | Run JavaScript and output result (no screenshot) |
 | `--format <fmt>` | Output format: `png` (screenshot) or `md` (Markdown). Default: `png` |
 | `--no-js` | Disable the page's JavaScript (capture the server-rendered HTML) |
+| `--base-url <url>` | Load a local file as if served from this `http(s)` URL (file input only) |
 | `--help` | Show help message |
 
 ### Examples
@@ -65,11 +68,28 @@ websnap http://example.com | xargs open
 
 # Extract Markdown and read it
 websnap http://example.com --format md | xargs cat
+
+# Load a local HTML file (relative URLs resolve against its folder)
+websnap saved/page.html --format md
+websnap saved/page.html -r 'document.title'
+
+# Load a saved page as if it were still at its original URL
+websnap saved/page.html --format md --base-url https://example.com/blog/post
 ```
+
+### Local files
+
+A path to an existing file is always parsed as HTML, whatever its extension. A `file://` URL also works, but the browser then decides how to treat it from the extension, and `--base-url` doesn't apply.
+
+Relative URLs resolve against the file's folder, and the Markdown frontmatter's `url` is the file's `file://` path.
+
+`--base-url` serves the file's HTML as the response to that URL, so the page behaves as if it came from there: `document.URL` and the frontmatter `url` are that URL, and relative images, CSS, and scripts load from that site over the network. Pass the page's own URL. Standard URL rules apply, so with `https://example.com/blog` (no trailing slash), `img.png` resolves to `https://example.com/img.png`. A `<base>` tag in the file still takes priority for resolving relative URLs.
+
+A local file's scripts run by default and can make network requests. Use `--no-js` for HTML you don't trust, but note that `-r` ignores `--no-js`.
 
 ## Output
 
-Screenshots are saved to `/tmp/{filename}.png` (or, with `--format md`, Markdown to `/tmp/{filename}.md`) where the filename is derived from the URL. Only the file path is printed to stdout, making it easy to pipe into other commands.
+Screenshots are saved to `/tmp/{filename}.png` (or, with `--format md`, Markdown to `/tmp/{filename}.md`) where the filename is derived from the URL, or from the absolute path for a local file. Only the file path is printed to stdout, making it easy to pipe into other commands.
 
 ### Markdown format
 

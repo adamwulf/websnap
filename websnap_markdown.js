@@ -99,7 +99,8 @@
         absolutizeUrls(container);
       }
       if (!title) {
-        title = (document.title || "").trim() || location.hostname;
+        title =
+          (document.title || "").trim() || location.hostname || localFileName();
       }
 
       // --- 3. Convert to Markdown -------------------------------------------
@@ -133,6 +134,17 @@
   };
 
   // --- document assembly ----------------------------------------------------
+
+  // The title of last resort for a file:// page, which has no hostname. A stray
+  // '%' in a hand-typed file:// URL can't be decoded, so keep the raw name then.
+  function localFileName() {
+    const name = location.pathname.split("/").pop();
+    try {
+      return decodeURIComponent(name);
+    } catch (error) {
+      return name;
+    }
+  }
 
   // YAML frontmatter (title, source url, fetch timestamp, and author when
   // Readability found a byline), then the converted body. Images keep the

@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -68,9 +69,26 @@ def proxy_from_env():
     return proxy
 
 
+def html_content_type(body):
+    """Return the Content-Type for serving a local file's bytes.
+
+    Over http(s), Chromium reads undeclared text as windows-1252, which garbles
+    UTF-8 in a file with no <meta charset>. Bytes that aren't valid UTF-8 stay
+    undeclared here so the file's own <meta charset> still applies.
+    """
+    try:
+        body.decode("utf-8")
+    except UnicodeDecodeError:
+        return "text/html"
+    return "text/html; charset=utf-8"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Capture web pages with realistic headers")
-    parser.add_argument("url", help="URL to capture")
+    parser.add_argument("url", help="URL, or path to a local HTML file, to capture")
+    parser.add_argument("--base-url",
+                        help="Load the local HTML file as if it were served from "
+                             "this URL, instead of from its own folder")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=None)
     parser.add_argument("--output", help="Output file path")
@@ -119,8 +137,25 @@ def main():
         context = browser.new_context(**context_opts)
         page = context.new_page()
 
-        # Navigate to the URL
-        page.goto(args.url, wait_until="networkidle")
+        # Navigate to the URL. A local file is served as the response to its own
+        # file:// URL, or to --base-url if given, so the browser treats the page
+        # as if it really came from there: relative URLs resolve against that
+        # location, and it parses as HTML whatever the file's extension. times=1
+        # covers only the document itself; everything the page then requests
+        # loads as usual.
+        target = args.url
+        if os.path.isfile(args.url):
+            with open(args.url, "rb") as handle:
+                html = handle.read()
+            content_type = html_content_type(html)
+            page.route(
+                "**/*",
+                lambda route: route.fulfill(body=html, content_type=content_type),
+                times=1,
+            )
+            target = args.base_url or Path(os.path.abspath(args.url)).as_uri()
+
+        page.goto(target, wait_until="networkidle")
 
         # JS-only mode: run script and print result
         if args.run_js:

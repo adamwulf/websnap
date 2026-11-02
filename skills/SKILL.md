@@ -1,12 +1,12 @@
 ---
 name: websnap
 description: Take a screenshot of a web page, extract it as Markdown, or run JavaScript against it. Use when checking page layout, verifying styling changes, inspecting rendered content, reading a page as text, or querying page properties like dimensions.
-argument-hint: <url> [-w width] [-h height] [-y scroll] [-f] [-r js] [--format png|md] [--no-js]
+argument-hint: <url|file> [-w width] [-h height] [-y scroll] [-f] [-r js] [--format png|md] [--no-js] [--base-url url]
 allowed-tools: Bash, Read
 disable-model-invocation: true
 ---
 
-Take a screenshot of the specified URL using `websnap` and display the result.
+Take a screenshot of the specified URL or local HTML file using `websnap` and display the result.
 
 ## Steps
 
@@ -25,6 +25,7 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 - `-r, --run <js>` — Run JavaScript and output result (no screenshot)
 - `--format <fmt>` — Output format: `png` (screenshot) or `md` (Markdown). Default: `png`
 - `--no-js` — Disable the page's JavaScript (capture server-rendered HTML; helps with SPA/archived pages where JS rewrites the content). Readability still runs.
+- `--base-url <url>` — Load a local file as if served from this `http(s)` URL (file input only)
 
 ## Examples
 
@@ -37,9 +38,11 @@ Take a screenshot of the specified URL using `websnap` and display the result.
 /websnap http://example.com -r 'document.documentElement.scrollHeight'
 /websnap http://example.com --format md
 /websnap https://web.archive.org/web/.../https://medium.com/... --format md --no-js
+/websnap saved/page.html --format md
+/websnap saved/page.html --format md --base-url https://example.com/blog/post
 ```
 
-If no URL is provided, ask the user what page they want to screenshot.
+If no URL or file is provided, ask the user what page they want to screenshot.
 
 ## Notes
 
@@ -48,3 +51,5 @@ Each call to `websnap` spawns a fresh browser instance. State does not persist b
 `--format md` extracts the main content (Mozilla Readability) and converts it to GitHub-flavored Markdown, saved as `/tmp/{filename}.md`. Each file begins with a YAML frontmatter block (`title`, `url`, `date` = fetch time, and `author` when a byline is found).
 
 Use `--no-js` when a `--format md` result comes back wrong on a single-page app or an archived (Wayback) snapshot — those are server-rendered with the article, but their client JavaScript can rewrite the DOM (often into a "404") before capture. Disabling page JS keeps the server-rendered content; Readability still runs. Do not use `--no-js` on genuinely client-rendered sites, which need their scripts to build the content at all.
+
+A local file's relative URLs resolve against its folder. Add `--base-url` with the page's original URL to resolve them against that site instead; the frontmatter `url` then shows that URL rather than the local path. Local files always parse as HTML, whatever their extension.

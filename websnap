@@ -14,6 +14,7 @@ RUN_JS=""
 USER_AGENT=""
 FORMAT="png"
 NO_JS=""
+BASE_URL=""
 URL=""
 
 # Default user-agent mimics a real Chrome browser to avoid bot detection
@@ -22,10 +23,10 @@ DEFAULT_USER_AGENT="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 show_help() {
     echo "websnap - Take screenshots of web pages using shot-scraper"
     echo ""
-    echo "Usage: websnap <url> [options]"
+    echo "Usage: websnap <url|file> [options]"
     echo ""
     echo "Arguments:"
-    echo "  url                  Required. The URL to screenshot"
+    echo "  url|file             Required. The URL or local HTML file to capture"
     echo ""
     echo "Options:"
     echo "  -w, --width <px>     Viewport width (default: 1280)"
@@ -39,6 +40,8 @@ show_help() {
     echo "                       (default: png)"
     echo "      --no-js          Disable the page's JavaScript (capture server-"
     echo "                       rendered HTML; helps with SPA/archived pages)"
+    echo "      --base-url <url> Load a local file as if served from this http(s)"
+    echo "                       URL (default: relative URLs use the file's folder)"
     echo "      --help           Show this help message"
     echo ""
     echo "Examples:"
@@ -49,6 +52,8 @@ show_help() {
     echo "  websnap http://example.com -r 'document.title'  # run JS, output result"
     echo "  websnap http://example.com --format md   # extract page as Markdown"
     echo "  websnap http://example.com --format md --no-js  # SPA/archived pages"
+    echo "  websnap page.html --format md            # local HTML file"
+    echo "  websnap page.html --format md --base-url https://example.com/blog/post"
     echo ""
     echo "Output:"
     echo "  png: screenshot saved to /tmp/{filename}.png"
@@ -99,6 +104,14 @@ while [ $# -gt 0 ]; do
             NO_JS="1"
             shift
             ;;
+        --base-url)
+            if [ $# -lt 2 ]; then
+                echo "Option --base-url requires a value (an http or https URL)" >&2
+                exit 1
+            fi
+            BASE_URL="$2"
+            shift 2
+            ;;
         --help)
             show_help
             ;;
@@ -118,10 +131,35 @@ if [ -z "$URL" ]; then
     show_help
 fi
 
+# The input is a local file if one exists at that path; otherwise it must be a
+# URL, which needs a scheme for the browser to accept it.
+INPUT_IS_FILE=""
+if [ -f "$URL" ]; then
+    INPUT_IS_FILE="1"
+elif ! [[ "$URL" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*: ]]; then
+    echo "Not a URL or an existing file: $URL" >&2
+    exit 1
+fi
+
 # Validate output format
 if [ "$FORMAT" != "png" ] && [ "$FORMAT" != "md" ]; then
     echo "Invalid format: $FORMAT (expected 'png' or 'md')" >&2
     exit 1
+fi
+
+# Validate base URL
+if [ -n "$BASE_URL" ]; then
+    if [ -z "$INPUT_IS_FILE" ]; then
+        echo "--base-url requires a local file path as input, not a URL" >&2
+        exit 1
+    fi
+    case "$BASE_URL" in
+        http://*|https://*) ;;
+        *)
+            echo "Invalid --base-url: $BASE_URL (expected an http or https URL)" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 # Resolve user-agent: explicit flag > default
@@ -145,12 +183,21 @@ fi
 if [ -n "$RUN_JS" ]; then
     "$VENV_PYTHON" "$CAPTURE_SCRIPT" "$URL" \
         --run-js "$RUN_JS" \
+        ${BASE_URL:+--base-url "$BASE_URL"} \
         --user-agent "$EFFECTIVE_UA"
     exit 0
 fi
 
-# Generate filename from URL
-FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+# Generate filename from the URL, or for a local file from its absolute path, so
+# that two index.html files in different folders don't overwrite each other.
+# Unusual characters in a path become "_" so the printed path stays safe to pipe
+# into xargs.
+if [ -n "$INPUT_IS_FILE" ]; then
+    ABSOLUTE_PATH="$(cd "$(dirname "$URL")" && pwd)/$(basename "$URL")"
+    FILENAME=$(echo "$ABSOLUTE_PATH" | sed 's|^/||' | sed 's|[^A-Za-z0-9._-]|_|g')
+else
+    FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|^file:///*||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+fi
 
 # Markdown mode: extract the rendered page as Markdown (no screenshot).
 # Scroll offsets and full-page height do not apply; only the viewport width and
@@ -166,6 +213,7 @@ if [ "$FORMAT" = "md" ]; then
         --height "$HEIGHT" \
         --output "$OUTPUT_PATH" \
         ${NO_JS:+--no-js} \
+        ${BASE_URL:+--base-url "$BASE_URL"} \
         --user-agent "$EFFECTIVE_UA" > /dev/null
     echo "${OUTPUT_PATH}"
     exit 0
@@ -178,6 +226,10 @@ CAPTURE_ARGS=("$URL" --width "$WIDTH" --output "$OUTPUT_PATH" --reduced-motion -
 
 if [ -n "$NO_JS" ]; then
     CAPTURE_ARGS+=(--no-js)
+fi
+
+if [ -n "$BASE_URL" ]; then
+    CAPTURE_ARGS+=(--base-url "$BASE_URL")
 fi
 
 if [ -n "$FULL_PAGE" ]; then
