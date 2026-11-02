@@ -21,7 +21,7 @@ A simple command-line tool for taking screenshots of web pages.
 websnap <url|file> [options]
 ```
 
-The input is a URL or a path to a local HTML file. All options work the same for both.
+The input is a URL or a path to a local HTML file. All options work the same for both, except `--base-url`, which is only for local files.
 
 ### Options
 
@@ -81,11 +81,11 @@ websnap saved/page.html --format md --base-url https://example.com/blog/post
 
 A path to an existing file is always parsed as HTML, whatever its extension. A `file://` URL also works, but the browser then decides how to treat it from the extension, and `--base-url` doesn't apply.
 
-Relative URLs resolve against the file's folder, and the Markdown frontmatter's `url` is the file's `file://` path.
+Relative URLs resolve against the file's folder. In Markdown output, the frontmatter's `url` and any relative links and images become `file://` URLs, which won't work elsewhere and show your local path if you share the file. Use `--base-url` to avoid this.
 
 `--base-url` serves the file's HTML as the response to that URL, so the page behaves as if it came from there: `document.URL` and the frontmatter `url` are that URL, and relative images, CSS, and scripts load from that site over the network. Pass the page's own URL. Standard URL rules apply, so with `https://example.com/blog` (no trailing slash), `img.png` resolves to `https://example.com/img.png`. A `<base>` tag in the file still takes priority for resolving relative URLs.
 
-A local file's scripts run by default and can make network requests. Use `--no-js` for HTML you don't trust, but note that `-r` ignores `--no-js`.
+A local file's scripts run by default and can make network requests. For HTML you don't trust, `--no-js` stops the scripts, but images, CSS, and frames in the file still load over the network, and `-r` ignores `--no-js`.
 
 ## Output
 
@@ -95,7 +95,7 @@ Screenshots are saved to `/tmp/{filename}.png` (or, with `--format md`, Markdown
 
 `--format md` extracts the page's main content and converts it to GitHub-flavored Markdown. It uses [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View extractor) plus [Turndown](https://github.com/mixmark-io/turndown) with the GFM plugin — the same libraries the `freezedry-webpage` extension uses, so article output matches that tool.
 
-Pages that read like a prose article are extracted with Readability. Anything else — a dashboard, a list, an app screen — takes a full-page fallback: the whole rendered `<body>` is converted after dropping everything the browser does not actually paint (`display:none` from any stylesheet, not just `[hidden]`), plus scripts, styles, navigation landmarks, and interactive controls. The fallback never returns empty. Images keep their absolute remote URLs (they are not inlined).
+Pages that read like a prose article are extracted with Readability. Anything else — a dashboard, a list, an app screen — takes a full-page fallback: the whole rendered `<body>` is converted after dropping everything the browser does not actually paint (`display:none` from any stylesheet, not just `[hidden]`), plus scripts, styles, navigation landmarks, and interactive controls. The fallback never returns empty. Images keep their absolute URLs (they are not inlined).
 
 Every `.md` file begins with a YAML frontmatter block:
 

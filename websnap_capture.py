@@ -72,9 +72,10 @@ def proxy_from_env():
 def html_content_type(body):
     """Return the Content-Type for serving a local file's bytes.
 
-    Over http(s), Chromium reads undeclared text as windows-1252, which garbles
-    UTF-8 in a file with no <meta charset>. Bytes that aren't valid UTF-8 stay
-    undeclared here so the file's own <meta charset> still applies.
+    Over http(s), Chromium guesses a legacy encoding such as windows-1252 for
+    undeclared text, which garbles UTF-8 in a file with no <meta charset>. Bytes
+    that aren't valid UTF-8 stay undeclared here so the file's own <meta charset>
+    still applies.
     """
     try:
         body.decode("utf-8")

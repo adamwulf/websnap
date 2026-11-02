@@ -196,7 +196,13 @@ if [ -n "$INPUT_IS_FILE" ]; then
     ABSOLUTE_PATH="$(cd "$(dirname "$URL")" && pwd)/$(basename "$URL")"
     FILENAME=$(echo "$ABSOLUTE_PATH" | sed 's|^/||' | sed 's|[^A-Za-z0-9._-]|_|g')
 else
-    FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|^file:///*||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+    FILENAME=$(echo "$URL" | sed 's|https\?://||' | sed 's|[/:?&=]|_|g' | sed 's|_$||')
+fi
+
+# A flattened deep path or long URL can pass the 255-byte filename limit. Keep the
+# tail, the most recognizable part, plus a hash so names stay distinct.
+if [ "${#FILENAME}" -gt 240 ]; then
+    FILENAME="$(echo "$FILENAME" | cksum | cut -d' ' -f1)_${FILENAME: -200}"
 fi
 
 # Markdown mode: extract the rendered page as Markdown (no screenshot).
