@@ -11,7 +11,7 @@
 // isProbablyReaderable gate, Readability extraction, min-char fallback, and
 // Turndown settings, so the article-path output matches that extension. The
 // image-inlining and in-page-download machinery is dropped: websnap is a
-// text-first CLI, so images keep their absolutized remote URLs and Python owns
+// text-first CLI, so images keep their absolutized URLs and Python owns
 // the file write.
 //
 // UPSTREAM: this file (and the vendored libraries under vendor/) are copied,
@@ -99,7 +99,8 @@
         absolutizeUrls(container);
       }
       if (!title) {
-        title = (document.title || "").trim() || location.hostname;
+        title =
+          (document.title || "").trim() || location.hostname || localFileName();
       }
 
       // --- 3. Convert to Markdown -------------------------------------------
@@ -134,9 +135,17 @@
 
   // --- document assembly ----------------------------------------------------
 
+  // The title of last resort for a file:// page, which has no hostname. Other
+  // hostless pages, such as data: URLs, have no filename to use.
+  function localFileName() {
+    return location.protocol === "file:"
+      ? decodeURIComponent(location.pathname.split("/").pop())
+      : "";
+  }
+
   // YAML frontmatter (title, source url, fetch timestamp, and author when
   // Readability found a byline), then the converted body. Images keep the
-  // absolute remote URLs Readability/absolutizeUrls produced — websnap does not
+  // absolute URLs Readability/absolutizeUrls produced — websnap does not
   // inline them.
   function composeDocument(body, title, byline, capturedAt) {
     const front = ["---"];

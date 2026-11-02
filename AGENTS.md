@@ -15,10 +15,12 @@ Each invocation spawns a fresh browser instance—no state (cookies, localStorag
 ## Usage
 
 ```bash
-websnap <url> [options]
+websnap <url|file> [options]
 websnap http://example.com | xargs open  # take screenshot and open it
 websnap http://example.com -f            # full page screenshot
 websnap http://example.com -r 'document.title'  # run JS, output result
+websnap page.html --format md            # local HTML file
+websnap page.html --format md --base-url https://example.com/blog/post
 ```
 
 ## Architecture
@@ -48,11 +50,22 @@ After the page renders, `websnap_capture.py` reads the three `vendor/` libraries
 - Article path: `Readability` on a document clone; if the extracted text is under `MIN_ARTICLE_CHARS` (500) the pick counts as blank and falls through.
 - Full-page fallback: clone the `<body>`, drop every element the browser does not actually paint (`getClientRects()`/computed style — `display:none` from any stylesheet, not just `[hidden]`), then strip scripts/styles, `<nav>`/`role=navigation`, and interactive controls, and absolutize URLs. Never returns empty.
 - Both paths convert with Turndown (atx headings, fenced code, `hr: ---`, `bulletListMarker: -`) + the GFM plugin.
-- Unlike the extension, images are **not** inlined — they keep absolute remote URLs (websnap is text-first).
+- Unlike the extension, images are **not** inlined — they keep absolute URLs, which are `file://` URLs for a local file with no `--base-url` (websnap is text-first).
 
 ### `--no-js`
 
 Sets Playwright's `java_script_enabled=False` on the context, so the page's own scripts never run and a client-side SPA can't rewrite the server-rendered HTML before capture. Works for both formats. It's essential for archived SPA snapshots (e.g. a Wayback `id_/` Medium URL): the raw HTML is server-rendered with the article, but Medium's client JS otherwise hydrates the DOM into its own 404. Because the Markdown libraries are injected over the evaluate channel (above), Readability still runs under `--no-js`. Do not use it on genuinely client-rendered sites — they need their scripts to build the content at all.
+
+### Local file input and `--base-url`
+
+The input is a local file if one exists at that path (`websnap` checks this first, so `foo:bar.html` is a file); otherwise it must have a URL scheme or `websnap` exits with an error. `--base-url` must be `http(s)` and is rejected for URL input, including `file://` URLs.
+
+`websnap_capture.py` serves a local file with a one-shot `page.route(..., times=1)` + `route.fulfill` as the response to `page.goto` — to `--base-url` if given, otherwise to the file's own `file://` URL. The later requests go out as usual, so relative assets load from the file's folder or from the base URL's site. This is why the behavior is the same for both:
+- It parses as HTML whatever the extension. A plain `file://` load of an extensionless file is not parsed as HTML, which would break temp files.
+- `document.URL`, and so the frontmatter `url`, is the real location. A `<base>` tag injected into the document couldn't do this.
+- The response declares `charset=utf-8` when the bytes are valid UTF-8 (`html_content_type`), because over `http(s)` Chromium guesses a legacy encoding such as windows-1252 for undeclared text. Other bytes stay undeclared so the file's `<meta charset>` applies.
+
+Output names come from the file's absolute path, not its basename, so two `index.html` files in different folders don't overwrite each other. Any name over 240 characters, from a deep path or a long URL, is cut to its last 200 characters plus a checksum prefix, to stay under the filesystem's 255-byte limit.
 
 ### Proxy env vars
 
